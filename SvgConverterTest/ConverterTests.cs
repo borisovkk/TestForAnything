@@ -80,24 +80,6 @@ namespace SvgConverterTest
         }
 
         [Test]
-        public void SvgDirToXamlTest_withNamePrefix()
-        {
-            var settings = new WpfDrawingSettings
-            {
-                IncludeRuntime = false,
-                TextAsGeometry = false,
-                OptimizePath = true,
-            };
-            var resKeyInfo = new ResKeyInfo { XamlName = "Test", Prefix = "NamePrefix" };
-            var xaml = ConverterLogic.SvgDirToXaml("TestFiles\\", resKeyInfo, settings);
-            Console.WriteLine(xaml);
-            //File.WriteAllText("TestFiles\\ExpectedXaml_SvgDirToXamlTest_withNamePrefix_.xaml", xaml);
-            var expectedXaml = File.ReadAllText("TestFiles\\ExpectedXaml_SvgDirToXamlTest_withNamePrefix.xaml");
-            Assert.That(xaml, Is.EqualTo(expectedXaml));
-            //xaml.Should().Be(expectedXaml);
-        }
-
-        [Test]
         public void SvgDirToXamlTest_withUseCompResKey()
         {
             var settings = new WpfDrawingSettings
