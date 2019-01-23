@@ -1,0 +1,15 @@
+version: 1.0.{build}
+environment:
+  AzureUserID:
+    secure: deOJol9Fccjq0uv9MIEFFpBOdcu2fypX+y5K9JvUoslvzRF/noVv++1A2pfup0aL
+  AzureUserPass:
+    secure: F4eslnJtiw7r++wcqMqVfw==
+  AzureTenantID:
+    secure: +x0FrKyu3wTKZpkWLsAszNAZIyTV2U/9/2pS7evar2HkTrrtScb2DbsAbSidM2MJ
+  AzureVMUser: admin1803
+  AzureVMName: UI-VM
+  AzureResGroup: VM2018
+build:
+  verbosity: minimal
+deploy_script:
+- ps: "$global:psSession = $null\n\nfunction sessionReady {\n    Param([string] $ConnectionUri, [System.Management.Automation.PSCredential] $credentials)\n\n    try {\n       $global:psSession = New-PSSession -ConnectionUri $ConnectionUri -Credential $credentials -SessionOption (New-PSSessionOption -SkipCACheck -SkipCNCheck -SkipRevocationCheck) -ErrorAction Stop\n       return \"Ready\"\n    }\n    catch {\n       return \"Error\"\n    }    \n}\n\n\nif ($env:APPVEYOR_REPO_BRANCH -eq \"master\") {\n  az login --service-principal --username $env:AzureUserID --password $env:AzureUserPass --tenant $env:AzureTenantID\n  az vm stop --name $env:AzureVMName --resource-group $env:AzureResGroup\n  az vm start --name $env:AzureVMName --resource-group $env:AzureResGroup\n\n  #Create a rule for network access to WinRM Service\n  $nsgVM = $env:AzureVMName + \"-nsg\"\n  az network nsg rule create --name WildAccess --nsg-name $nsgVM  --resource-group $env:AzureResGroup --priority 101 --access Allow --source-address-prefixes '*' --source-port-ranges '*' --destination-address-prefixes '*' --destination-port-ranges 5986 --protocol Tcp\n\n  $username = $env:AzureVMUser\n  $secureStringPassword = ConvertTo-SecureString -string $env:AzureUserPass -AsPlainText -Force\n  $cred = New-Object -typename System.Management.Automation.PSCredential -argumentlist $username, $secureStringPassword\n  $AzureVMIO = $(az vm list-ip-addresses -n $env:AzureVMName --query [0].virtualMachine.network.publicIpAddresses[0].ipAddress -o tsv)\n  Write-Host \"AzureVMIO = \" $AzureVMIO\n  $AzureConnUri = 'https://' + $AzureVMIO + ':5986' \n\n\n  $i = 0\n  while ($(sessionReady $AzureConnUri $cred) -eq \"Error\") {\n     Start-Sleep -Seconds 15\n     Write-Host \"$env:AzureVMName not ready. Waiting\"\n     $i += 1\n     if ($i -ge 10){\n        Exit 1\n     }\n  }\n \n#create archive for fast transfer\n  Compress-Archive -Path '.\\' -DestinationPath .\\Source.zip -CompressionLevel Optimal -Force\n\n#Copy archive and remote script to Remote VM\n  Copy-Item -ToSession $psSession -Path .\\Source.zip -Destination \"D:\\Source.zip\"\n  Copy-Item -ToSession $psSession -Path .\\Scripts\\UITests_Remote.ps1 -Destination \"D:\\UITests_Remote.ps1\"\n\n  #Launch script fot UI-tests\n  Invoke-Command -Session $psSession -FilePath .\\Scripts\\RemoteScheduleTask.ps1\n\n #Delete the rule for network access to WinRM Service \n az network nsg rule delete --resource-group $env:AzureResGroup --nsg-name $nsgVM --name WildAccess\n az vm stop --name $env:AzureVMName --resource-group $env:AzureResGroup\n \n }"
